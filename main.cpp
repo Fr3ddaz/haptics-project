@@ -43,6 +43,7 @@
 
 //------------------------------------------------------------------------------
 #include "chai3d.h"
+#include "math.h"
 //------------------------------------------------------------------------------
 using namespace chai3d;
 using namespace std;
@@ -560,6 +561,72 @@ void graphicsTimer(int data)
 
 //------------------------------------------------------------------------------
 
+/**
+ * @brief May look unnecessary, but it's just for naming purposes so the code
+ * gets easier to read.
+ * @param The position of the proxy in the device.
+ * @return The normalized direction in the device as seen from origo,
+ * @author Fredrik Johansson
+ */
+cVector3d* getNormalizedDirVector(cVector3d* position) {
+    position->normalize();
+    return position;
+}
+
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Calculates and returns the "up vector" (90 degrees from the direction
+ * vector).
+ * @param dirVector The direction vector.
+ * @return The up vector.
+ * @author Fredrik Johansson
+ */
+cVector3d* getUpVector(cVector3d dirVector) {
+    return NULL;
+}
+
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Calculates and returns appropriate values for the angles in the
+ * rotation matrix.
+ * @param dirVector The direction vector.
+ * @param upVector The up vector.
+ * @return The calculated angles.
+ * @author Fredrik Johansson
+ */
+cVector3d* getRotationAngles(cVector3d dirVector, cVector3d upVector) {
+    return NULL;
+}
+
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Returns rotation matrix given three precalculated angles.
+ * @param angles The precalculated angles.
+ * @return The rotation matrix.
+ */
+cMatrix3d* getRotationMatrix(cVector3d angles) {
+    cMatrix3d* rotationMatrix = new cMatrix3d();
+    rotationMatrix->set(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    return rotationMatrix;
+}
+
+//------------------------------------------------------------------------------
+
+/**
+ * @brief Calculates the new direction of the Camera.
+ * @param dirVector The current directon of the Camera.
+ * @param rotationMatrix The rotation matrix.
+ * @return The new direction of the Camera.
+ */
+cVector3d* calculateNewDirection(cVector3d dirVector, cMatrix3d rotationMatrix) {
+    return NULL;
+}
+
+//------------------------------------------------------------------------------
+
 void updateGraphics(void)
 {
     /////////////////////////////////////////////////////////////////////
@@ -742,6 +809,8 @@ void updateHaptics(void)
         }
 
         previousUserSwitch =tool->getUserSwitch(0);
+
+        cout << tool->getDeviceLocalPos();
     }
 
     // exit haptics thread
