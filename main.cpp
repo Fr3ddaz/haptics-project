@@ -606,6 +606,7 @@ cVector3d* getRotationAngles(cVector3d dirVector, cVector3d upVector) {
  * @brief Returns rotation matrix given three precalculated angles.
  * @param angles The precalculated angles.
  * @return The rotation matrix.
+ * @author Fredrik Johansson
  */
 cMatrix3d* getRotationMatrix(cVector3d angles) {
     cMatrix3d* rotationMatrix = new cMatrix3d();
@@ -620,6 +621,7 @@ cMatrix3d* getRotationMatrix(cVector3d angles) {
  * @param dirVector The current directon of the Camera.
  * @param rotationMatrix The rotation matrix.
  * @return The new direction of the Camera.
+ * @author Fredrik Johansson
  */
 cVector3d* calculateNewDirection(cVector3d dirVector, cMatrix3d rotationMatrix) {
     return NULL;
