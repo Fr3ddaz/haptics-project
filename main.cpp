@@ -86,6 +86,7 @@ int fps;
 cWorld* world;
 
 // a camera to render the world in the window display
+cVector3d cameraPos;
 cCamera* camera;
 
 // a light source to illuminate the objects in the world
@@ -265,8 +266,9 @@ int main(int argc, char* argv[])
     camera = new cCamera(world);
     world->addChild(camera);
 
+    cameraPos = cVector3d (0.8, 0.0, 0.5);
     // position and orient the camera
-    camera->set( cVector3d (0.8, 0.0, 0.5),    // camera position (eye)
+    camera->set( cameraPos,    // camera position (eye)
                  cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
                  cVector3d (0.0, 0.0, 1.0));   // direction of the (up) vector
 
@@ -573,8 +575,10 @@ void graphicsTimer(int data)
  * @return The normalized direction in the device as seen from origo,
  * @author Fredrik Johansson
  */
-cVector3d* getNormalizedDirVector(cVector3d* position) {
-    position->normalize();
+cVector3d getNormalizedDirVector(cVector3d position) {
+
+    position.normalize();
+
     return position;
 }
 
@@ -585,9 +589,11 @@ cVector3d* getNormalizedDirVector(cVector3d* position) {
  * @return The up vector.
  * @author Fredrik Johansson
  */
-cVector3d* getUpVector() {
+cVector3d getUpVector() {
+
     cVector3d* upVector = new cVector3d(0,0,1);
-    return upVector;
+
+    return *upVector;
 }
 
 //------------------------------------------------------------------------------
@@ -599,26 +605,26 @@ cVector3d* getUpVector() {
  * @return The calculated angles.
  * @author Fredrik Johansson
  */
-cVector3d* getRotationAngles(cVector3d* dirVector) {
+cVector3d getRotationAngles(cVector3d dirVector) {
 
     double vec;
     cVector3d* angles = new cVector3d(0,0,0);
 
     // Find x,y angle
-    vec = dirVector->x();
+    vec = dirVector.x();
     double xyAngle = acos(vec);
 
     // Find y,z angle
-    vec = dirVector->y();
+    vec = dirVector.y();
     double yzAngle = acos(vec);
 
     // Find z,x angle
-    vec = dirVector->z();
+    vec = dirVector.z();
     double zxAngle = acos(vec);
 
-    angles->set(xyAngle/fps, yzAngle/fps, zxAngle/fps);
+    angles->set(xyAngle/(fps*100000), yzAngle/(fps*100000), zxAngle/(fps*100000));
 
-    return angles;
+    return *angles;
 }
 
 //------------------------------------------------------------------------------
@@ -629,17 +635,17 @@ cVector3d* getRotationAngles(cVector3d* dirVector) {
  * @return The rotation matrix.
  * @author Fredrik Johansson
  */
-cMatrix3d* getRotationMatrix(cVector3d* dirVector) {
+cMatrix3d getRotationMatrix(cVector3d dirVector) {
 
-    cVector3d* angles = getRotationAngles(dirVector);
+    cVector3d angles = getRotationAngles(dirVector);
 
     cMatrix3d* rX = new cMatrix3d();
     cMatrix3d* rY = new cMatrix3d();
     cMatrix3d* rZ = new cMatrix3d();
 
-    double xy = angles->x();
-    double yz = angles->y();
-    double zx = angles->z();
+    double xy = angles.x();
+    double yz = angles.y();
+    double zx = angles.z();
 
     rX->set(1, 0, 0, 0, cos(yz), -sin(yz), 0, sin(yz), cos(yz));
     rY->set(cos(zx), 0, sin(zx), 0, 1, 0, -sin(zx), 0, cos(zx));
@@ -648,7 +654,7 @@ cMatrix3d* getRotationMatrix(cVector3d* dirVector) {
     rZ->mul(*rY);
     rZ->mul(*rX);
 
-    return rZ;
+    return *rZ;
 }
 
 //------------------------------------------------------------------------------
@@ -656,34 +662,41 @@ cMatrix3d* getRotationMatrix(cVector3d* dirVector) {
 /**
  * @brief Calculates the new direction of the Camera.
  * @param dirVector The current directon of the Camera.
- * @param rotationMatrix The rotation matrix.
  * @return The new direction of the Camera.
  * @author Fredrik Johansson
  */
-cVector3d* calculateNewDirection(cVector3d* dirVector, cMatrix3d* rotationMatrix) {
+cVector3d calculateNewDirection(cVector3d dirVector) {
 
+    cout << "Old dir: " << dirVector << "\n";
+    dirVector.normalize();
+    cMatrix3d rotationMatrix = getRotationMatrix(dirVector);
     int size = 3;
     double result[3];
     cVector3d* newDirection = new cVector3d();
 
-    for(int i=0; i<size; ++size) {
-        result[0] = 0;
-        result[0] += dirVector->get(0)*rotationMatrix->getCol0().get(i);
+    result[0] = 0;
+    for(int i=0; i<size; ++i) {
+        result[0] += dirVector.get(0)*rotationMatrix.getCol0().get(i);
     }
 
-    for(int i=0; i<size; ++size) {
-        result[1] = 0;
-        result[1] += dirVector->get(1)*rotationMatrix->getCol1().get(i);
+    result[1] = 0;
+    for(int i=0; i<size; ++i) {
+        result[1] += dirVector.get(1)*rotationMatrix.getCol1().get(i);
     }
 
-    for(int i=0; i<size; ++size) {
-        result[2] = 0;
-        result[2] += dirVector->get(2)*rotationMatrix->getCol2().get(i);
+    result[2] = 0;
+    for(int i=0; i<size; ++i) {
+        result[2] += dirVector.get(2)*rotationMatrix.getCol2().get(i);
     }
 
     newDirection->set(result[0], result[1], result[2]);
     newDirection->normalize();
-    return newDirection;
+
+    cout << "New dir: " << *newDirection << "\n";
+
+    cout << "\n";
+
+    return *newDirection;
 }
 
 //------------------------------------------------------------------------------
@@ -726,6 +739,9 @@ enum cMode
 
 void updateHaptics(void)
 {
+    // Current Camera position.
+    cVector3d currentPos;
+
     // simulation clock
     cPrecisionClock simClock;
 
@@ -743,8 +759,6 @@ void updateHaptics(void)
         // HAPTIC RENDERING
         /////////////////////////////////////////////////////////////////////////
 
-        cout << tool->getDeviceLocalPos() << "\n";
-
         // update frequency counter
         frequencyCounter.signal(1);
 
@@ -754,6 +768,14 @@ void updateHaptics(void)
         // update position and orientation of tool
         tool->updatePose();
 
+        currentPos = tool->getDeviceLocalPos();
+
+        cVector3d newDirection = calculateNewDirection(currentPos);
+
+        camera->set(cameraPos, newDirection, cVector3d(0.0, 0.0, 1.0));
+
+
+        /**
         // compute interaction forces
         tool->computeInteractionForces();
 
@@ -872,6 +894,12 @@ void updateHaptics(void)
         }
 
         previousUserSwitch =tool->getUserSwitch(0);
+        */
+
+        if (tool->getUserSwitch(0) == 1)
+        {
+            cameraPos = cameraPos - camera->getLookVector()/80000;
+        }
     }
 
     // exit haptics thread
