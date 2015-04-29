@@ -79,6 +79,9 @@ bool mirroredDisplay = false;
 // DECLARED VARIABLES
 //------------------------------------------------------------------------------
 
+// Number of times the movement of the player will be updated every second.
+int fps;
+
 // a world that contains all objects of the virtual environment
 cWorld* world;
 
@@ -182,6 +185,8 @@ int main(int argc, char* argv[])
     //--------------------------------------------------------------------------
     // INITIALIZATION
     //--------------------------------------------------------------------------
+
+    fps = 60;
 
     cout << endl;
     cout << "-----------------------------------" << endl;
@@ -576,14 +581,13 @@ cVector3d* getNormalizedDirVector(cVector3d* position) {
 //------------------------------------------------------------------------------
 
 /**
- * @brief Calculates and returns the "up vector" (90 degrees from the direction
- * vector).
- * @param dirVector The direction vector.
+ * @brief Returns the "up vector".
  * @return The up vector.
  * @author Fredrik Johansson
  */
-cVector3d* getUpVector(cVector3d dirVector) {
-    return NULL;
+cVector3d* getUpVector() {
+    cVector3d* upVector = new cVector3d(0,0,1);
+    return upVector;
 }
 
 //------------------------------------------------------------------------------
@@ -591,13 +595,30 @@ cVector3d* getUpVector(cVector3d dirVector) {
 /**
  * @brief Calculates and returns appropriate values for the angles in the
  * rotation matrix.
- * @param dirVector The direction vector.
- * @param upVector The up vector.
+ * @param dirVector The direction vector (should always be normalized).
  * @return The calculated angles.
  * @author Fredrik Johansson
  */
-cVector3d* getRotationAngles(cVector3d dirVector, cVector3d upVector) {
-    return NULL;
+cVector3d* getRotationAngles(cVector3d* dirVector) {
+
+    double vec;
+    cVector3d* angles = new cVector3d(0,0,0);
+
+    // Find x,y angle
+    vec = dirVector->x();
+    double xyAngle = acos(vec);
+
+    // Find y,z angle
+    vec = dirVector->y();
+    double yzAngle = acos(vec);
+
+    // Find z,x angle
+    vec = dirVector->z();
+    double zxAngle = acos(vec);
+
+    angles->set(xyAngle/fps, yzAngle/fps, zxAngle/fps);
+
+    return angles;
 }
 
 //------------------------------------------------------------------------------
@@ -608,10 +629,26 @@ cVector3d* getRotationAngles(cVector3d dirVector, cVector3d upVector) {
  * @return The rotation matrix.
  * @author Fredrik Johansson
  */
-cMatrix3d* getRotationMatrix(cVector3d angles) {
-    cMatrix3d* rotationMatrix = new cMatrix3d();
-    rotationMatrix->set(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    return rotationMatrix;
+cMatrix3d* getRotationMatrix(cVector3d* dirVector) {
+
+    cVector3d* angles = getRotationAngles(dirVector);
+
+    cMatrix3d* rX = new cMatrix3d();
+    cMatrix3d* rY = new cMatrix3d();
+    cMatrix3d* rZ = new cMatrix3d();
+
+    double xy = angles->x();
+    double yz = angles->y();
+    double zx = angles->z();
+
+    rX->set(1, 0, 0, 0, cos(yz), -sin(yz), 0, sin(yz), cos(yz));
+    rY->set(cos(zx), 0, sin(zx), 0, 1, 0, -sin(zx), 0, cos(zx));
+    rZ->set(cos(xy), -sin(xy), 0, sin(xy), cos(xy), 0, 0, 0, 1);
+
+    rZ->mul(*rY);
+    rZ->mul(*rX);
+
+    return rZ;
 }
 
 //------------------------------------------------------------------------------
@@ -623,8 +660,30 @@ cMatrix3d* getRotationMatrix(cVector3d angles) {
  * @return The new direction of the Camera.
  * @author Fredrik Johansson
  */
-cVector3d* calculateNewDirection(cVector3d dirVector, cMatrix3d rotationMatrix) {
-    return NULL;
+cVector3d* calculateNewDirection(cVector3d* dirVector, cMatrix3d* rotationMatrix) {
+
+    int size = 3;
+    double result[3];
+    cVector3d* newDirection = new cVector3d();
+
+    for(int i=0; i<size; ++size) {
+        result[0] = 0;
+        result[0] += dirVector->get(0)*rotationMatrix->getCol0().get(i);
+    }
+
+    for(int i=0; i<size; ++size) {
+        result[1] = 0;
+        result[1] += dirVector->get(1)*rotationMatrix->getCol1().get(i);
+    }
+
+    for(int i=0; i<size; ++size) {
+        result[2] = 0;
+        result[2] += dirVector->get(2)*rotationMatrix->getCol2().get(i);
+    }
+
+    newDirection->set(result[0], result[1], result[2]);
+    newDirection->normalize();
+    return newDirection;
 }
 
 //------------------------------------------------------------------------------
@@ -683,6 +742,8 @@ void updateHaptics(void)
         /////////////////////////////////////////////////////////////////////////
         // HAPTIC RENDERING
         /////////////////////////////////////////////////////////////////////////
+
+        cout << tool->getDeviceLocalPos() << "\n";
 
         // update frequency counter
         frequencyCounter.signal(1);
@@ -811,8 +872,6 @@ void updateHaptics(void)
         }
 
         previousUserSwitch =tool->getUserSwitch(0);
-
-        cout << tool->getDeviceLocalPos();
     }
 
     // exit haptics thread
