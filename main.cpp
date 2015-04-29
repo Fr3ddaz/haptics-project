@@ -89,7 +89,6 @@ cDirectionalLight *light;
 
 // a virtual object
 cMultiMesh* object;
-cMultiMesh* object1;
 
 // rotational velocity of the object
 cVector3d rotVel;
@@ -357,16 +356,13 @@ int main(int argc, char* argv[])
 
     // create a virtual mesh
     object = new cMultiMesh();
-    object1 = new cMultiMesh();
 
     // add object to world
     world->addChild(object);
-    //world->addChild(object1);
 
     // load an object file
     bool fileload;
     fileload = object->loadFromFile("pipeCentred.obj");
-    fileload = object1->loadFromFile("teapot.obj");
 
     if (!fileload)
     {
@@ -377,46 +373,30 @@ int main(int argc, char* argv[])
 
     // disable culling so that faces are rendered on both sides
     object->setUseCulling(false);
-     object1->setUseCulling(false);
-
 
     cMaterial m;
     cMaterial m1;
     m.setBlueCadet();
     m1.setGreenOlive();
     object->setMaterial(m);
-    object1->setMaterial(m1);
-
-    object1->setLocalPos(-0.4, -0.3, -0.4);
-    object1->setWireMode(true);
 
      // compute a boundary box
     object->computeBoundaryBox(true);
-    object1->computeBoundaryBox(true);
 
     // show/hide bounding box
     object->setShowBoundaryBox(false);
-    object1->setShowBoundaryBox(false);
 
     // compute collision detection algorithm
     object->createAABBCollisionDetector(toolRadius);
-    object1->createAABBCollisionDetector(toolRadius);
 
     // define a default stiffness for the object
     object->setStiffness(0.5 * maxStiffness, true);
-    object1->setStiffness(2 * maxStiffness, true);
 
     // define some haptic friction properties
     object->setFriction(0.1, 0.2, true);
-     object1->setFriction(1, 2, true);
-//   object1->setStaticFriction(1, true);
-//   object->setStaticFriction(0.1, true);
-//   object->setDynamicFriction(0.1, true);
-//   object1->setDynamicFriction(1, true);
 
     // enable display list for faster graphic rendering
     object->setUseDisplayList(true);
-    object1->setUseDisplayList(true);
 
     //--------------------------------------------------------------------------
     // WIDGETS
