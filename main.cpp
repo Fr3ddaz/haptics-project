@@ -87,6 +87,8 @@ cWorld* world;
 
 // a camera to render the world in the window display
 cVector3d cameraPos;
+cVector3d upVector;
+cVector3d viewVector;
 cCamera* camera;
 
 // a light source to illuminate the objects in the world
@@ -106,6 +108,7 @@ cGenericHapticDevicePtr hapticDevice;
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
+cVector3d toolPosition;
 
 // a label to display the rate [Hz] at which the simulation is running
 cLabel* labelHapticRate;
@@ -264,9 +267,11 @@ int main(int argc, char* argv[])
 
     // create a camera and insert it into the virtual world
     camera = new cCamera(world);
+    viewVector = cVector3d(-1.0, 0.0, 0.0);
+    upVector = cVector3d(0.0, 0.0, 1.0);
     world->addChild(camera);
 
-    cameraPos = cVector3d (0.8, 0.0, 0.5);
+    cameraPos = cVector3d (0.0, 0.0, 0.2);
     // position and orient the camera
     camera->set( cameraPos,    // camera position (eye)
                  cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
@@ -326,6 +331,7 @@ int main(int argc, char* argv[])
 
     // connect the haptic device to the virtual tool
     tool->setHapticDevice(hapticDevice);
+    toolPosition = cVector3d(0, 0, 0);
 
     // define the radius of the tool (sphere)
     double toolRadius = 0.05;
@@ -622,7 +628,7 @@ cVector3d getRotationAngles(cVector3d dirVector) {
     vec = dirVector.z();
     double zxAngle = acos(vec);
 
-    angles->set(xyAngle/(fps*100000), yzAngle/(fps*100000), zxAngle/(fps*100000));
+    angles->set(xyAngle/(40), yzAngle/(40), zxAngle/(40));
 
     return *angles;
 }
@@ -667,7 +673,6 @@ cMatrix3d getRotationMatrix(cVector3d dirVector) {
  */
 cVector3d calculateNewDirection(cVector3d dirVector) {
 
-    cout << "Old dir: " << dirVector << "\n";
     dirVector.normalize();
     cMatrix3d rotationMatrix = getRotationMatrix(dirVector);
     int size = 3;
@@ -692,10 +697,6 @@ cVector3d calculateNewDirection(cVector3d dirVector) {
     newDirection->set(result[0], result[1], result[2]);
     newDirection->normalize();
 
-    cout << "New dir: " << *newDirection << "\n";
-
-    cout << "\n";
-
     return *newDirection;
 }
 
@@ -703,6 +704,11 @@ cVector3d calculateNewDirection(cVector3d dirVector) {
 
 void updateGraphics(void)
 {
+
+    // Current Camera position.
+    cVector3d currentPos;
+
+    currentPos = tool->getDeviceLocalPos();
     /////////////////////////////////////////////////////////////////////
     // UPDATE WIDGETS
     /////////////////////////////////////////////////////////////////////
@@ -727,6 +733,31 @@ void updateGraphics(void)
     // check for any OpenGL errors
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) cout << "Error: " << gluErrorString(err) << endl;
+
+    cVector3d direction = toolPosition;
+
+    direction.normalize();
+
+    cMatrix3d rotationMatrix = getRotationMatrix(direction);
+
+    cVector3d newDirection = rotationMatrix * viewVector;
+
+    upVector = rotationMatrix * upVector;
+
+    //coordSystem.mul(getRotationMatrix(newDirection));
+
+    cout << tool->getDeviceLocalPos();
+
+    cout << viewVector << "\n";
+
+    camera->set(cameraPos, newDirection, upVector);
+
+    viewVector = newDirection;
+
+    if (tool->getUserSwitch(0) == 1)
+    {
+        cameraPos = cameraPos - camera->getLookVector()/8000;
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -739,8 +770,7 @@ enum cMode
 
 void updateHaptics(void)
 {
-    // Current Camera position.
-    cVector3d currentPos;
+
 
     // simulation clock
     cPrecisionClock simClock;
@@ -767,12 +797,12 @@ void updateHaptics(void)
 
         // update position and orientation of tool
         tool->updatePose();
+        toolPosition = tool->getDeviceLocalPos();
 
-        currentPos = tool->getDeviceLocalPos();
 
-        cVector3d newDirection = calculateNewDirection(currentPos);
 
-        camera->set(cameraPos, newDirection, cVector3d(0.0, 0.0, 1.0));
+
+
 
 
         /**
@@ -896,10 +926,7 @@ void updateHaptics(void)
         previousUserSwitch =tool->getUserSwitch(0);
         */
 
-        if (tool->getUserSwitch(0) == 1)
-        {
-            cameraPos = cameraPos - camera->getLookVector()/80000;
-        }
+
     }
 
     // exit haptics thread
