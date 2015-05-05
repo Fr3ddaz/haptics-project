@@ -142,6 +142,9 @@ int collisionTreeDisplayLevel = 0;
 //------------------------------------------------------------------------------
 // convert to resource path
 #define RESOURCE_PATH(p)    (char*)((resourceRoot+string(p)).c_str())
+#define PI 3.14159265358979
+#define sensitivity 30
+#define speed 0.01
 
 
 //------------------------------------------------------------------------------
@@ -162,6 +165,8 @@ void graphicsTimer(int data);
 
 // function that closes the application
 void close(void);
+
+cVector3d getRotationAngles(cVector3d direction);
 
 // main haptics simulation loop
 void updateHaptics(void);
@@ -189,8 +194,6 @@ int main(int argc, char* argv[])
     //--------------------------------------------------------------------------
     // INITIALIZATION
     //--------------------------------------------------------------------------
-
-    fps = 60;
 
     cout << endl;
     cout << "-----------------------------------" << endl;
@@ -267,11 +270,11 @@ int main(int argc, char* argv[])
 
     // create a camera and insert it into the virtual world
     camera = new cCamera(world);
-    viewVector = cVector3d(-1.0, 0.0, 0.0);
+    viewVector = cVector3d(-1.0, -0.1, -0.1);
     upVector = cVector3d(0.0, 0.0, 1.0);
     world->addChild(camera);
 
-    cameraPos = cVector3d (0.0, 0.0, 0.2);
+    cameraPos = cVector3d (0.8, 0.0, 0.2);
     // position and orient the camera
     camera->set( cameraPos,    // camera position (eye)
                  cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
@@ -575,36 +578,6 @@ void graphicsTimer(int data)
 //------------------------------------------------------------------------------
 
 /**
- * @brief May look unnecessary, but it's just for naming purposes so the code
- * gets easier to read.
- * @param The position of the proxy in the device.
- * @return The normalized direction in the device as seen from origo,
- * @author Fredrik Johansson
- */
-cVector3d getNormalizedDirVector(cVector3d position) {
-
-    position.normalize();
-
-    return position;
-}
-
-//------------------------------------------------------------------------------
-
-/**
- * @brief Returns the "up vector".
- * @return The up vector.
- * @author Fredrik Johansson
- */
-cVector3d getUpVector() {
-
-    cVector3d* upVector = new cVector3d(0,0,1);
-
-    return *upVector;
-}
-
-//------------------------------------------------------------------------------
-
-/**
  * @brief Calculates and returns appropriate values for the angles in the
  * rotation matrix.
  * @param dirVector The direction vector (should always be normalized).
@@ -613,22 +586,53 @@ cVector3d getUpVector() {
  */
 cVector3d getRotationAngles(cVector3d dirVector) {
 
+    double xyAngle = 0, yzAngle = 0, zxAngle = 0;
     double vec;
     cVector3d* angles = new cVector3d(0,0,0);
+    if(dirVector.y() < 0.95 || dirVector.y() > -0.95) {
+    if(dirVector.x() < 0) {
+        if(dirVector.y() != 0) {
+            if(dirVector.y() < 0) {
+            // Find x,y angle
+                double x1 = -1, y1 = 0, x2 = dirVector.x(), y2 = dirVector.y();
+                double sq = sqrt(x2 * x2 + y2 * y2);
+                x2 = x2 / sq;
+                y2 = y2 / sq;
+                xyAngle = acos(x1*x2 + y1*y2);
+            } else {
+                double x1 = -1, y1 = 0, x2 = dirVector.x(), y2 = dirVector.y();
+                double sq = sqrt(x2 * x2 + y2 * y2);
+                x2 = x2 / sq;
+                y2 = y2 / sq;
+                xyAngle = -acos(x1*x2 + y1*y2);
+            }
+        }
+    }
 
-    // Find x,y angle
-    vec = dirVector.x();
-    double xyAngle = acos(vec);
+    if(dirVector.x() < 0) {
+        if(dirVector.z() != 0.0d) {
+            if(dirVector.z() > 0) {
+                // Find z,x angle
+                double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                double sq = sqrt(z2*z2 + x2*x2);
+                z2 = z2 / sq;
+                x2 = x2 / sq;
+                zxAngle = acos(z1*z2 + x1*x2);
+            } else {
+                // Find z,x angle
+                double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                double sq = sqrt(z2*z2 + x2*x2);
+                z2 = z2 / sq;
+                x2 = x2 / sq;
+                zxAngle = -acos(z1*z2 + x1*x2);
+        }
+    }
+    }
+    } else {
+        return *angles;
+    }
 
-    // Find y,z angle
-    vec = dirVector.y();
-    double yzAngle = acos(vec);
-
-    // Find z,x angle
-    vec = dirVector.z();
-    double zxAngle = acos(vec);
-
-    angles->set(xyAngle/(40), yzAngle/(40), zxAngle/(40));
+    angles->set(xyAngle/sensitivity, yzAngle/sensitivity, zxAngle/sensitivity);
 
     return *angles;
 }
@@ -649,55 +653,18 @@ cMatrix3d getRotationMatrix(cVector3d dirVector) {
     cMatrix3d* rY = new cMatrix3d();
     cMatrix3d* rZ = new cMatrix3d();
 
-    double xy = angles.x();
+    double yx = angles.x();
     double yz = angles.y();
     double zx = angles.z();
 
     rX->set(1, 0, 0, 0, cos(yz), -sin(yz), 0, sin(yz), cos(yz));
     rY->set(cos(zx), 0, sin(zx), 0, 1, 0, -sin(zx), 0, cos(zx));
-    rZ->set(cos(xy), -sin(xy), 0, sin(xy), cos(xy), 0, 0, 0, 1);
+    rZ->set(cos(yx), -sin(yx), 0, sin(yx), cos(yx), 0, 0, 0, 1);
 
     rZ->mul(*rY);
     rZ->mul(*rX);
 
     return *rZ;
-}
-
-//------------------------------------------------------------------------------
-
-/**
- * @brief Calculates the new direction of the Camera.
- * @param dirVector The current directon of the Camera.
- * @return The new direction of the Camera.
- * @author Fredrik Johansson
- */
-cVector3d calculateNewDirection(cVector3d dirVector) {
-
-    dirVector.normalize();
-    cMatrix3d rotationMatrix = getRotationMatrix(dirVector);
-    int size = 3;
-    double result[3];
-    cVector3d* newDirection = new cVector3d();
-
-    result[0] = 0;
-    for(int i=0; i<size; ++i) {
-        result[0] += dirVector.get(0)*rotationMatrix.getCol0().get(i);
-    }
-
-    result[1] = 0;
-    for(int i=0; i<size; ++i) {
-        result[1] += dirVector.get(1)*rotationMatrix.getCol1().get(i);
-    }
-
-    result[2] = 0;
-    for(int i=0; i<size; ++i) {
-        result[2] += dirVector.get(2)*rotationMatrix.getCol2().get(i);
-    }
-
-    newDirection->set(result[0], result[1], result[2]);
-    newDirection->normalize();
-
-    return *newDirection;
 }
 
 //------------------------------------------------------------------------------
@@ -718,7 +685,6 @@ void updateGraphics(void)
 
     // update position of label
     labelHapticRate->setLocalPos((int)(0.5 * (windowW - labelHapticRate->getWidth())), 15);
-
 
     /////////////////////////////////////////////////////////////////////
     // RENDER SCENE
@@ -742,21 +708,15 @@ void updateGraphics(void)
 
     cVector3d newDirection = rotationMatrix * viewVector;
 
-    upVector = rotationMatrix * upVector;
-
-    //coordSystem.mul(getRotationMatrix(newDirection));
-
-    cout << tool->getDeviceLocalPos();
-
-    cout << viewVector << "\n";
-
-    camera->set(cameraPos, newDirection, upVector);
+    camera->set(cameraPos, newDirection, cVector3d(0,0,1));
 
     viewVector = newDirection;
 
     if (tool->getUserSwitch(0) == 1)
     {
-        cameraPos = cameraPos - camera->getLookVector()/8000;
+        // Do nothing.
+    } else {
+        cameraPos = cameraPos + camera->getLookVector()*currentPos.x()*speed;
     }
 }
 
