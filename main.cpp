@@ -609,6 +609,7 @@ cVector3d getRotationAngles(cVector3d dirVector) {
         }
     }
 
+    // TODO fix the inverted backwards problem. Have to check if our direction is positive or negative along the x-axis.
     if(dirVector.x() < 0) {
         if(dirVector.z() != 0.0d) {
             if(dirVector.z() > 0) {
