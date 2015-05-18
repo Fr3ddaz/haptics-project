@@ -108,7 +108,6 @@ cGenericHapticDevicePtr hapticDevice;
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
-cVector3d toolPosition;
 
 // a label to display the rate [Hz] at which the simulation is running
 cLabel* labelHapticRate;
@@ -143,8 +142,9 @@ int collisionTreeDisplayLevel = 0;
 // convert to resource path
 #define RESOURCE_PATH(p)    (char*)((resourceRoot+string(p)).c_str())
 #define PI 3.14159265358979
-#define sensitivity 30
+#define sensitivity 20
 #define speed 0.01
+#define ZERO 0.0
 
 
 //------------------------------------------------------------------------------
@@ -274,6 +274,7 @@ int main(int argc, char* argv[])
     upVector = cVector3d(0.0, 0.0, 1.0);
     world->addChild(camera);
 
+    // global vector object containing the position of the camera.
     cameraPos = cVector3d (0.8, 0.0, 0.2);
     // position and orient the camera
     camera->set( cameraPos,    // camera position (eye)
@@ -334,7 +335,6 @@ int main(int argc, char* argv[])
 
     // connect the haptic device to the virtual tool
     tool->setHapticDevice(hapticDevice);
-    toolPosition = cVector3d(0, 0, 0);
 
     // define the radius of the tool (sphere)
     double toolRadius = 0.05;
@@ -347,6 +347,7 @@ int main(int argc, char* argv[])
 
     // create a white cursor
     tool->m_hapticPoint->m_sphereProxy->m_material->setWhite();
+    tool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0.5);
 
     // enable if objects in the scene are going to rotate of translate
     // or possibly collide against the tool. If the environment
@@ -609,33 +610,56 @@ cVector3d getRotationAngles(cVector3d dirVector) {
         }
     }
 
-    // TODO fix the inverted backwards problem. Have to check if our direction is positive or negative along the x-axis.
-    if(dirVector.x() < 0) {
-        if(dirVector.z() != 0.0d) {
-            if(dirVector.z() > 0) {
-                // Find z,x angle
-                double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
-                double sq = sqrt(z2*z2 + x2*x2);
-                z2 = z2 / sq;
-                x2 = x2 / sq;
-                zxAngle = acos(z1*z2 + x1*x2);
-            } else {
-                // Find z,x angle
-                double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
-                double sq = sqrt(z2*z2 + x2*x2);
-                z2 = z2 / sq;
-                x2 = x2 / sq;
-                zxAngle = -acos(z1*z2 + x1*x2);
+    if(camera->getLookVector().x() >= ZERO) {
+        if(dirVector.x() < 0) {
+            if(dirVector.z() != 0.0d) {
+                if(dirVector.z() > 0) {
+                    // Find z,x angle
+                    double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                    double sq = sqrt(z2*z2 + x2*x2);
+                    z2 = z2 / sq;
+                    x2 = x2 / sq;
+                    zxAngle = acos(z1*z2 + x1*x2);
+                } else {
+                    // Find z,x angle
+                    double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                    double sq = sqrt(z2*z2 + x2*x2);
+                    z2 = z2 / sq;
+                    x2 = x2 / sq;
+                    zxAngle = -acos(z1*z2 + x1*x2);
+                }
+            }
+        } else {
+            return *angles;
         }
-    }
-    }
-    } else {
-        return *angles;
+    } else if(camera->getLookVector().x() < ZERO) {
+        if(dirVector.x() < 0) {
+            if(dirVector.z() != 0.0d) {
+                if(dirVector.z() > 0) {
+                    // Find z,x angle
+                    double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                    double sq = sqrt(z2*z2 + x2*x2);
+                    z2 = z2 / sq;
+                    x2 = x2 / sq;
+                    zxAngle = -acos(z1*z2 + x1*x2);
+                } else {
+                    // Find z,x angle
+                    double z1 = 0, z2 = dirVector.z(), x1 = -1, x2 = dirVector.x();
+                    double sq = sqrt(z2*z2 + x2*x2);
+                    z2 = z2 / sq;
+                    x2 = x2 / sq;
+                    zxAngle = acos(z1*z2 + x1*x2);
+                }
+            }
+        } else {
+            return *angles;
+        }
     }
 
     angles->set(xyAngle/sensitivity, yzAngle/sensitivity, zxAngle/sensitivity);
 
     return *angles;
+}
 }
 
 //------------------------------------------------------------------------------
@@ -672,11 +696,6 @@ cMatrix3d getRotationMatrix(cVector3d dirVector) {
 
 void updateGraphics(void)
 {
-
-    // Current Camera position.
-    cVector3d currentPos;
-
-    currentPos = tool->getDeviceLocalPos();
     /////////////////////////////////////////////////////////////////////
     // UPDATE WIDGETS
     /////////////////////////////////////////////////////////////////////
@@ -691,6 +710,9 @@ void updateGraphics(void)
     // RENDER SCENE
     /////////////////////////////////////////////////////////////////////
 
+    // vector containing the position within the device.
+    cVector3d currentPos = tool->getDeviceLocalPos();
+
     // render world
     camera->renderView(windowW, windowH);
 
@@ -701,24 +723,34 @@ void updateGraphics(void)
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) cout << "Error: " << gluErrorString(err) << endl;
 
-    cVector3d direction = toolPosition;
+    // the direction equals to a vector where each dimension is set to the coordinates of the device location.
+    cVector3d direction = currentPos;
 
+    // normalize the direction vector.
     direction.normalize();
 
+    // get the rotation matrix for the (-1,0,0) and direction vectors divided by a constant set in the pre-processor.
     cMatrix3d rotationMatrix = getRotationMatrix(direction);
 
+    // rotate the view using the rotation matrix.
     cVector3d newDirection = rotationMatrix * viewVector;
 
+    // change the camera view direction accordingly.
     camera->set(cameraPos, newDirection, cVector3d(0,0,1));
 
+    // overwrite the old direction with the new one.
     viewVector = newDirection;
 
+    // TODO we have to read the location of the proxy here. Maybe?
+    // if button is pressed, do not change position of camera, if not pressed update position depending on how much we are pressing the device ahead.
     if (tool->getUserSwitch(0) == 1)
     {
         // Do nothing.
     } else {
         cameraPos = cameraPos + camera->getLookVector()*currentPos.x()*speed;
     }
+
+    tool->setLocalPos(cameraPos);
 }
 
 //------------------------------------------------------------------------------
@@ -758,7 +790,6 @@ void updateHaptics(void)
 
         // update position and orientation of tool
         tool->updatePose();
-        toolPosition = tool->getDeviceLocalPos();
 
 
 
