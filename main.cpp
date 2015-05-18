@@ -48,6 +48,7 @@
 using namespace chai3d;
 using namespace std;
 //------------------------------------------------------------------------------
+
 #ifndef MACOSX
 #include "GL/glut.h"
 #else
@@ -87,7 +88,6 @@ cWorld* world;
 
 // a camera to render the world in the window display
 cVector3d cameraPos;
-cVector3d upVector;
 cVector3d viewVector;
 cCamera* camera;
 
@@ -108,6 +108,7 @@ cGenericHapticDevicePtr hapticDevice;
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
+cShapeSphere* camSphere;
 
 // a label to display the rate [Hz] at which the simulation is running
 cLabel* labelHapticRate;
@@ -271,14 +272,22 @@ int main(int argc, char* argv[])
     // create a camera and insert it into the virtual world
     camera = new cCamera(world);
     viewVector = cVector3d(-1.0, -0.1, -0.1);
-    upVector = cVector3d(0.0, 0.0, 1.0);
     world->addChild(camera);
 
     // global vector object containing the position of the camera.
-    cameraPos = cVector3d (0.8, 0.0, 0.2);
+    cameraPos = cVector3d (0.0, 0.0, 0.0);
+
+    double camRadius = 0.02;
+
+    camSphere = new cShapeSphere(camRadius);
+    world->addChild(camSphere);
+    camSphere->setLocalPos(cameraPos);
+    camSphere->m_material->setRed();
+    camSphere->setTransparencyLevel(0.0, true, true);
+
     // position and orient the camera
     camera->set( cameraPos,    // camera position (eye)
-                 cVector3d (0.0, 0.0, 0.0),    // lookat position (target)
+                 cVector3d (0.0, 0.0, 0.0),    // look at position (target)
                  cVector3d (0.0, 0.0, 1.0));   // direction of the (up) vector
 
     // set the near and far clipping planes of the camera
@@ -337,7 +346,7 @@ int main(int argc, char* argv[])
     tool->setHapticDevice(hapticDevice);
 
     // define the radius of the tool (sphere)
-    double toolRadius = 0.05;
+    double toolRadius = 0.002;
 
     // define a radius for the tool
     tool->setRadius(toolRadius);
@@ -346,8 +355,8 @@ int main(int argc, char* argv[])
     tool->setShowContactPoints(true, false);
 
     // create a white cursor
-    tool->m_hapticPoint->m_sphereProxy->m_material->setWhite();
-    tool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0.5);
+    tool->m_hapticPoint->m_sphereProxy->m_material->setGreen();
+    tool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0);
 
     // enable if objects in the scene are going to rotate of translate
     // or possibly collide against the tool. If the environment
@@ -359,6 +368,7 @@ int main(int argc, char* argv[])
 
     // start the haptic tool
     tool->start();
+
 
 
     //--------------------------------------------------------------------------
@@ -405,7 +415,7 @@ int main(int argc, char* argv[])
     object->setShowBoundaryBox(false);
 
     // compute collision detection algorithm
-    object->createAABBCollisionDetector(toolRadius);
+    object->createAABBCollisionDetector(camRadius);
 
     // define a default stiffness for the object
     object->setStiffness(0.5 * maxStiffness, true);
@@ -710,9 +720,6 @@ void updateGraphics(void)
     // RENDER SCENE
     /////////////////////////////////////////////////////////////////////
 
-    // vector containing the position within the device.
-    cVector3d currentPos = tool->getDeviceLocalPos();
-
     // render world
     camera->renderView(windowW, windowH);
 
@@ -722,6 +729,9 @@ void updateGraphics(void)
     // check for any OpenGL errors
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) cout << "Error: " << gluErrorString(err) << endl;
+
+    // vector containing the position within the device.
+    cVector3d currentPos = tool->getDeviceLocalPos();
 
     // the direction equals to a vector where each dimension is set to the coordinates of the device location.
     cVector3d direction = currentPos;
@@ -735,9 +745,6 @@ void updateGraphics(void)
     // rotate the view using the rotation matrix.
     cVector3d newDirection = rotationMatrix * viewVector;
 
-    // change the camera view direction accordingly.
-    camera->set(cameraPos, newDirection, cVector3d(0,0,1));
-
     // overwrite the old direction with the new one.
     viewVector = newDirection;
 
@@ -750,7 +757,10 @@ void updateGraphics(void)
         cameraPos = cameraPos + camera->getLookVector()*currentPos.x()*speed;
     }
 
-    tool->setLocalPos(cameraPos);
+    // change the camera view direction accordingly.
+    camera->set(cameraPos, newDirection, cVector3d(0,0,1));
+
+    //tool->setPos(camera->getGlobalPos());
 }
 
 //------------------------------------------------------------------------------
@@ -791,9 +801,11 @@ void updateHaptics(void)
         // update position and orientation of tool
         tool->updatePose();
 
+        if (tool->m_hapticPoint->getNumCollisionEvents() > 0)
+        {
 
-
-
+            cout << "collision" << "\n";
+        }
 
 
 
