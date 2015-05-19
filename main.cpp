@@ -108,6 +108,7 @@ cGenericHapticDevicePtr hapticDevice;
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
+cToolCursor* physicsTool;
 cShapeSphere* camSphere;
 
 // a label to display the rate [Hz] at which the simulation is running
@@ -340,34 +341,46 @@ int main(int argc, char* argv[])
 
     // create a tool (cursor) and insert into the world
     tool = new cToolCursor(world);
+    physicsTool = new cToolCursor(world);
     world->addChild(tool);
+    world->addChild(physicsTool);
 
     // connect the haptic device to the virtual tool
     tool->setHapticDevice(hapticDevice);
 
     // define the radius of the tool (sphere)
     double toolRadius = 0.002;
+    double physicsToolRadius = 0.002;
 
     // define a radius for the tool
     tool->setRadius(toolRadius);
+    physicsTool->setRadius(physicsToolRadius);
 
     // hide the device sphere. only show proxy.
     tool->setShowContactPoints(true, false);
+    physicsTool->setShowContactPoints(true, false);
 
     // create a white cursor
     tool->m_hapticPoint->m_sphereProxy->m_material->setGreen();
     tool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0);
 
+//    cMultiMesh::getMesh();
+
+    physicsTool->m_hapticPoint->m_sphereProxy->m_material->setBlue();
+    physicsTool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0);
+
     // enable if objects in the scene are going to rotate of translate
     // or possibly collide against the tool. If the environment
     // is entirely static, you can set this parameter to "false"
     tool->enableDynamicObjects(true);
+    physicsTool->enableDynamicObjects(true);
 
     // map the physical workspace of the haptic device to a larger virtual workspace.
     tool->setWorkspaceRadius(0.3);
 
     // start the haptic tool
     tool->start();
+    physicsTool->start();
 
 
 
@@ -415,7 +428,7 @@ int main(int argc, char* argv[])
     object->setShowBoundaryBox(false);
 
     // compute collision detection algorithm
-    object->createAABBCollisionDetector(camRadius);
+    object->createAABBCollisionDetector(physicsToolRadius);
 
     // define a default stiffness for the object
     object->setStiffness(0.5 * maxStiffness, true);
@@ -731,10 +744,15 @@ void updateGraphics(void)
     if (err != GL_NO_ERROR) cout << "Error: " << gluErrorString(err) << endl;
 
     // vector containing the position within the device.
+
     cVector3d currentPos = tool->getDeviceLocalPos();
 
+    cVector3d position;
+
+    hapticDevice->getPosition(position);
+
     // the direction equals to a vector where each dimension is set to the coordinates of the device location.
-    cVector3d direction = currentPos;
+    cVector3d direction = position;
 
     // normalize the direction vector.
     direction.normalize();
@@ -748,19 +766,26 @@ void updateGraphics(void)
     // overwrite the old direction with the new one.
     viewVector = newDirection;
 
+    cVector3d newPosition = cameraPos;
+
     // TODO we have to read the location of the proxy here. Maybe?
     // if button is pressed, do not change position of camera, if not pressed update position depending on how much we are pressing the device ahead.
     if (tool->getUserSwitch(0) == 1)
     {
         // Do nothing.
     } else {
-        cameraPos = cameraPos + camera->getLookVector()*currentPos.x()*speed;
+        newPosition = cameraPos + camera->getLookVector()*currentPos.x()*speed;
+//        tool->setLocalPos(newPosition);
     }
 
-    // change the camera view direction accordingly.
-    camera->set(cameraPos, newDirection, cVector3d(0,0,1));
+    cameraPos = newPosition;
 
-    //tool->setPos(camera->getGlobalPos());
+    cVector3d diffVector = tool->getLocalPos() - camera->getLocalPos();
+
+    // change the camera view direction accordingly.
+    camera->set(newPosition, newDirection, cVector3d(0,0,1));
+
+    physicsTool->setLocalPos(camera->getLocalPos());
 }
 
 //------------------------------------------------------------------------------
@@ -795,19 +820,53 @@ void updateHaptics(void)
         // update frequency counter
         frequencyCounter.signal(1);
 
+
+
         // compute global reference frames for each object
         world->computeGlobalPositions(true);
 
         // update position and orientation of tool
         tool->updatePose();
 
+        hapticDevice->setForce(cVector3d(0, 0, 0));
+
+        tool->computeInteractionForces();
+
+        // send forces to haptic device
+        if(!isApplyingGravity)
+            tool->applyForces();
+        isApplyingGravity = false;
+
+        // retrieve and update the force that is applied on each object
+
+        // stop the simulation clock
+        simClock.stop();
+
+        // read the time increment in seconds
+        double timeInterval = simClock.getCurrentTimeSeconds();
+
+        // restart the simulation clock
+        simClock.reset();
+        simClock.start();
+
+        // temp variable to compute rotational acceleration
+        cVector3d rotAcc(0,0,0);
+
+        // check if tool is touching an object
+        cGenericObject* objectContact = nullptr;
         if (tool->m_hapticPoint->getNumCollisionEvents() > 0)
         {
+            // get contact event
+            cCollisionEvent* collisionEvent = tool->m_hapticPoint->getCollisionEvent(0);
 
-            cout << "collision" << "\n";
+            // get object from contact event
+            objectContact = collisionEvent->m_object;
         }
 
-
+        if (objectContact != NULL)
+        {
+            cout << "collision";
+        }
 
         /**
         // compute interaction forces
