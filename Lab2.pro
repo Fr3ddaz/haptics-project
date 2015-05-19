@@ -8,6 +8,8 @@ SOURCES += main.cpp
 INCLUDEPATH += $$PWD/../chai3d-3.0.0/src
 INCLUDEPATH += $$PWD/../chai3d-3.0.0/external/Eigen
 INCLUDEPATH += $$PWD/../chai3d-3.0.0/external/glew/include
+INCLUDEPATH += $$PWD/../chai3d-3.0.0/modules/ODE/src
+INCLUDEPATH += $$PWD/../chai3d-3.0.0/modules/ODE/external/ODE/include
 
 win32{
     CONFIG(release, debug|release): LIBS += -L$$PWD/../chai3d-3.0.0/lib/Release/x64/ -lchai3d
@@ -21,6 +23,7 @@ unix {
     QMAKE_CXXFLAGS += -std=c++0x
     LIBS += -L$$PWD/../chai3d-3.0.0/lib/release/lin-x86_64-cc/ -lchai3d
     LIBS += -L$$PWD/../chai3d-3.0.0/external/DHD/lib/lin-x86_64/ -ldrd
+    LIBS += -L$$PWD/../chai3d-3.0.0/modules/ODE/lib/release/lin-x86_64-cc/ -lCODE
     LIBS += -lusb-1.0
     LIBS += -lpthread -lrt -ldl -lGL -lGLU -lglut
 }

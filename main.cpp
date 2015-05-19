@@ -44,10 +44,13 @@
 //------------------------------------------------------------------------------
 #include "chai3d.h"
 #include "math.h"
+#include <chrono>
+//    cMultiMesh::getMesh();
 //------------------------------------------------------------------------------
 using namespace chai3d;
 using namespace std;
 //------------------------------------------------------------------------------
+#include "CODE.h"
 
 #ifndef MACOSX
 #include "GL/glut.h"
@@ -80,15 +83,13 @@ bool mirroredDisplay = false;
 // DECLARED VARIABLES
 //------------------------------------------------------------------------------
 
-// Number of times the movement of the player will be updated every second.
-int fps;
-
 // a world that contains all objects of the virtual environment
 cWorld* world;
 
-// a camera to render the world in the window display
+// a camera to render the world in the window display and all the variables it will need for movement and collision detection
 cVector3d cameraPos;
 cVector3d viewVector;
+cShapeSphere* camSphere;
 cCamera* camera;
 
 // a light source to illuminate the objects in the world
@@ -108,8 +109,9 @@ cGenericHapticDevicePtr hapticDevice;
 
 // a virtual tool representing the haptic device in the scene
 cToolCursor* tool;
-cToolCursor* physicsTool;
-cShapeSphere* camSphere;
+
+// the system time last time a frame was updated
+unsigned long lastMilliseconds;
 
 // a label to display the rate [Hz] at which the simulation is running
 cLabel* labelHapticRate;
@@ -144,8 +146,8 @@ int collisionTreeDisplayLevel = 0;
 // convert to resource path
 #define RESOURCE_PATH(p)    (char*)((resourceRoot+string(p)).c_str())
 #define PI 3.14159265358979
-#define sensitivity 20
-#define speed 0.01
+#define sensitivity 500
+#define speed 0.0002
 #define ZERO 0.0
 
 
@@ -272,15 +274,12 @@ int main(int argc, char* argv[])
 
     // create a camera and insert it into the virtual world
     camera = new cCamera(world);
-    viewVector = cVector3d(-1.0, -0.1, -0.1);
-    world->addChild(camera);
-
     // global vector object containing the position of the camera.
     cameraPos = cVector3d (0.0, 0.0, 0.0);
-
-    double camRadius = 0.02;
-
-    camSphere = new cShapeSphere(camRadius);
+    double camSphereRadius = 0.02;
+    viewVector = cVector3d(-1.0, -0.1, -0.1);
+    world->addChild(camera);
+    camSphere = new cShapeSphere(camSphereRadius);
     world->addChild(camSphere);
     camSphere->setLocalPos(cameraPos);
     camSphere->m_material->setRed();
@@ -341,48 +340,34 @@ int main(int argc, char* argv[])
 
     // create a tool (cursor) and insert into the world
     tool = new cToolCursor(world);
-    physicsTool = new cToolCursor(world);
     world->addChild(tool);
-    world->addChild(physicsTool);
 
     // connect the haptic device to the virtual tool
     tool->setHapticDevice(hapticDevice);
 
     // define the radius of the tool (sphere)
     double toolRadius = 0.002;
-    double physicsToolRadius = 0.002;
 
     // define a radius for the tool
     tool->setRadius(toolRadius);
-    physicsTool->setRadius(physicsToolRadius);
 
     // hide the device sphere. only show proxy.
     tool->setShowContactPoints(true, false);
-    physicsTool->setShowContactPoints(true, false);
 
     // create a white cursor
     tool->m_hapticPoint->m_sphereProxy->m_material->setGreen();
     tool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0);
 
-//    cMultiMesh::getMesh();
-
-    physicsTool->m_hapticPoint->m_sphereProxy->m_material->setBlue();
-    physicsTool->m_hapticPoint->m_sphereProxy->m_material->setTransparencyLevel(0);
-
     // enable if objects in the scene are going to rotate of translate
     // or possibly collide against the tool. If the environment
     // is entirely static, you can set this parameter to "false"
     tool->enableDynamicObjects(true);
-    physicsTool->enableDynamicObjects(true);
 
     // map the physical workspace of the haptic device to a larger virtual workspace.
     tool->setWorkspaceRadius(0.3);
 
     // start the haptic tool
     tool->start();
-    physicsTool->start();
-
-
 
     //--------------------------------------------------------------------------
     // CREATE OBJECT
@@ -428,7 +413,7 @@ int main(int argc, char* argv[])
     object->setShowBoundaryBox(false);
 
     // compute collision detection algorithm
-    object->createAABBCollisionDetector(physicsToolRadius);
+    object->createAABBCollisionDetector(camSphereRadius);
 
     // define a default stiffness for the object
     object->setStiffness(0.5 * maxStiffness, true);
@@ -743,49 +728,8 @@ void updateGraphics(void)
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) cout << "Error: " << gluErrorString(err) << endl;
 
-    // vector containing the position within the device.
-
-    cVector3d currentPos = tool->getDeviceLocalPos();
-
-    cVector3d position;
-
-    hapticDevice->getPosition(position);
-
-    // the direction equals to a vector where each dimension is set to the coordinates of the device location.
-    cVector3d direction = position;
-
-    // normalize the direction vector.
-    direction.normalize();
-
-    // get the rotation matrix for the (-1,0,0) and direction vectors divided by a constant set in the pre-processor.
-    cMatrix3d rotationMatrix = getRotationMatrix(direction);
-
-    // rotate the view using the rotation matrix.
-    cVector3d newDirection = rotationMatrix * viewVector;
-
-    // overwrite the old direction with the new one.
-    viewVector = newDirection;
-
-    cVector3d newPosition = cameraPos;
-
-    // TODO we have to read the location of the proxy here. Maybe?
-    // if button is pressed, do not change position of camera, if not pressed update position depending on how much we are pressing the device ahead.
-    if (tool->getUserSwitch(0) == 1)
-    {
-        // Do nothing.
-    } else {
-        newPosition = cameraPos + camera->getLookVector()*currentPos.x()*speed;
-//        tool->setLocalPos(newPosition);
-    }
-
-    cameraPos = newPosition;
-
-    cVector3d diffVector = tool->getLocalPos() - camera->getLocalPos();
-
     // change the camera view direction accordingly.
-    camera->set(newPosition, newDirection, cVector3d(0,0,1));
-
-    physicsTool->setLocalPos(camera->getLocalPos());
+    camera->set(cameraPos, viewVector, cVector3d(0,0,1));
 }
 
 //------------------------------------------------------------------------------
@@ -813,6 +757,51 @@ void updateHaptics(void)
     // main haptic simulation loop
     while(simulationRunning)
     {
+
+        /////////////////////////////////////////////////////////////////////////
+        // MOVEMENT HANDLING
+        /////////////////////////////////////////////////////////////////////////
+
+        unsigned long milliseconds_since_epoch = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
+
+        if(lastMilliseconds != milliseconds_since_epoch) {
+            cVector3d currentPos = tool->getDeviceLocalPos();
+
+            cVector3d position;
+
+            hapticDevice->getPosition(position);
+
+            // the direction equals to a vector where each dimension is set to the coordinates of the device location.
+            cVector3d direction = position;
+
+            // normalize the direction vector.
+            direction.normalize();
+
+            // get the rotation matrix for the (-1,0,0) and direction vectors divided by a constant set in the pre-processor.
+            cMatrix3d rotationMatrix = getRotationMatrix(direction);
+
+            // rotate the view using the rotation matrix.
+            cVector3d newDirection = rotationMatrix * viewVector;
+
+            // overwrite the old direction with the new one.
+            viewVector = newDirection;
+
+            cVector3d newPosition = cameraPos;
+
+            // TODO we have to read the location of the proxy here. Maybe?
+            // if button is pressed, do not change position of camera, if not pressed update position depending on how much we are pressing the device ahead.
+            if (tool->getUserSwitch(0) == 1)
+            {
+                // Do nothing.
+            } else {
+                newPosition = cameraPos + camera->getLookVector()*currentPos.x()*speed;
+                //tool->setLocalPos(newPosition);
+            }
+
+            cameraPos = newPosition;
+            lastMilliseconds = milliseconds_since_epoch;
+        }
+
         /////////////////////////////////////////////////////////////////////////
         // HAPTIC RENDERING
         /////////////////////////////////////////////////////////////////////////
@@ -867,6 +856,8 @@ void updateHaptics(void)
         {
             cout << "collision";
         }
+
+
 
         /**
         // compute interaction forces
